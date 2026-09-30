@@ -9,6 +9,8 @@
 
 import * as cg from "../render/core/cg.js";
 import { ControllerBeam } from "../render/core/controllerInput.js";
+import { Structure } from "../render/core/structure.js";
+
 
 window.objInfo = {           // SHARED STATE
    twirlNum: 0,              // INCREMENTS BY ONE EACH TIME SHE TWIRLS
@@ -98,9 +100,15 @@ export const init = async model => {
    right_eye.move(0.11, 2.15, -.441).turnY(.15).turnZ(-1.1).scale(0.05, 0.07, 0.005).color(0, 0.2, 1);
    left_eye.move(-0.11, 2.15, -.441).turnY(-.15).turnZ(1.1).scale(0.05, 0.07, 0.005).color(0, 0.2, 1);
 
+   let text = clay.defineTextMesh('myText', `\ EVE from WALL-E `);
+   model.add('myText').move(-.5, 2.9, -1).color(0, .25, .5);
+ 
+
    // ANIMATION FRAMEWORK
 
    model.animate(() => {
+
+       model.identity().move(-.5, 2, 1.5);
 
        // BEGIN ANIMATE BY SYNCHRONIZING STATE
 
