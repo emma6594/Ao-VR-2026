@@ -8,29 +8,25 @@
 */
 
 import * as global from "../global.js";
-import { quat } from "../render/math/gl-matrix.js";
 import { ControllerBeam } from "../render/core/controllerInput.js";
 import { Gltf2Node } from "../render/nodes/gltf2.js";
 
 
 window.objInfo = {           // SHARED STATE       
-   xyz: [0, -0.5, -0.5]      // STARTING POSITION                      
+   xyz: [0.4, 0.3, -0.5]     // STARTING POSITION                      
 }
 
 export const init = async model => {
 
-   // LOADS THE GLTF MODELS OF THE PLANT AND DRONES
+   // LOADS THE GLTF MODELS OF THE PLANT AND DRONES AND SETS PLANT VARIABLES
 
    let plant = new Gltf2Node({ url: './media/gltf/plant/plant.glb' });
-   let q = quat.create();
-   plant.scale = [0.05, 0.05, 0.05];
-   plant.translation = [0, 0.5, -0.5];
-   let plantPos = [0, 0.5, -0.5];
+   plant.scale = [0.01, 0.01, 0.01];
+   plant.translation = [-0.2, 1.15, 0];
+   let plantPos = [-0.2, 1.15, 0];
    let spawnTimer = 0;
    let spawnInterval = 2; 
    let lastTime = null;
-   quat.fromEuler(q, 0, 180, 0);
-   plant.rotation = q;
    global.gltfRoot.addNode(plant);
 
    // GAME VARIABLES: SCORE, PLANT HEALTH, AND WIN/LOSS FLAGS
@@ -46,7 +42,7 @@ export const init = async model => {
    const drones = [];
    for (let i = 0; i < 5; i++) {
       let drone = new Gltf2Node({ url: './media/gltf/drone/scene.gltf'});
-      drone.scale = [0.00005, 0.00005, 0.00005];
+      drone.scale = [0.000025, 0.000025, 0.000025];
       drone.translation = [0, -100, 0];
       global.gltfRoot.addNode(drone);
       drones.push({drone, active: false, pos: [0, -100, 0], speed: 0.5});
@@ -97,15 +93,15 @@ export const init = async model => {
    // INSTRUCTIONS, STATUS (UPDATED EVERY FRAME), AND GAME OVER (EMPTY UNTIL GAME ENDS) TEXT MESSAGES
 
    let text = clay.defineTextMesh('instructions', `EVE's Plant Defense\nDrones are coming - shoot them before they get to the plant `);
-   model.add('instructions').move(0, 3.1, 0).turnY(Math.PI-1).color(0, .25, .5);
+   model.add('instructions').move(-2, 5, 4).turnY(Math.PI-1).color(0, .25, .5).scale(5);
 
    let status = clay.defineTextMesh('status', `Score: 0, Plant Health: 100`);
-   model.add('status').move(0, 3, 0).turnY(Math.PI-1).color(0, .25, .5);
+   model.add('status').move(-2, 4.5, 4).turnY(Math.PI-1).color(0, .25, .5).scale(5);
 
    let gameOver = clay.defineTextMesh('game_over', ``);
-   model.add('game_over').move(0, 2.9, 0).turnY(Math.PI-1).color(0, .25, .5);
+   model.add('game_over').move(-2, 4, 4).turnY(Math.PI-1).color(0, .25, .5).scale(5);
    
-   // SPAWNS THE DRONES AT A RANDOM ANGLE AND MOVES ACTIVE ONES TOWARDS THE PLANT
+   // SPAWNS THE DRONES AT RANDOM ANGLES
 
    function spawnDrone() {
     
@@ -133,8 +129,9 @@ export const init = async model => {
       d.active = true;
       d.drone.translation = d.pos;
 
-
    }
+
+   // MOVES ACTIVE DRONES TOWARDS THE PLANT
 
    function updateDrones(dt) {
       for (let i = 0; i < drones.length; i++) {
@@ -143,10 +140,15 @@ export const init = async model => {
             continue;
          }
 
-         let dx = plantPos[0] - drone.pos[0];
+         // DIRECTIONS FROM DRONE TO PLANT
+
+
+         let dx = plantPos[0] - drone.pos[0]; 
          let dy = plantPos[1] - drone.pos[1];
          let dz = plantPos[2] - drone.pos[2];
          let distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
+
+         // CHECKS FOR IMPACT AND IF THE DRONE HAS REACHED, PLANT LOSES 10 HEALTH AND DRONE IS INACTIVE
 
          if (distance < 0.1) {
             plantHealth -= 10;
@@ -156,16 +158,23 @@ export const init = async model => {
             continue;
          }
 
+         // MOVING TOWARDS THE PLANT
+
          let step = Math.min(1, drone.speed * dt / distance);
          drone.pos[0] += dx * step;
          drone.pos[1] += dy * step;
          drone.pos[2] += dz * step;
+
+         // UPDATES THE DRONE'S POSITION IN THE WORLD
+
          drone.drone.translation = drone.pos;
 
       }
    }
 
-   let hit_radius = 3;
+   let hit_radius = 1;
+
+   // RETURNS POSITION OF THE BEAM ORIGIN BASED ON THE HAND
 
    function beamOrigin(hand) {
       let beam;
@@ -176,8 +185,13 @@ export const init = async model => {
          beam = RBeam;
       }
       let bm = beam.beamMatrix();
+      
+      // X, Y, Z POSITIONS OF THE CONTROLLER IN WORLD SPACE
+
       return [bm[12], bm[13], bm[14]];
    }
+
+   // RETURNS THE DIRECTION OF THE BEAM BASED ON THE HAND
 
    function beamDirection(hand) {
       let beam;
@@ -189,44 +203,61 @@ export const init = async model => {
       }
       let bm = beam.beamMatrix();
       let z = [bm[8], bm[9], bm[10]];
-      let len = Math.sqrt(z[0] * z[0] + z[1] * z[1] + z[2] * z[2]);
-      return [-z[0] / len, -z[1] / len, -z[2] / len];
+
+      // NORMALIZE THE DIRECTION VECTOR
+
+      let length = Math.sqrt(z[0] * z[0] + z[1] * z[1] + z[2] * z[2]);
+      return [-z[0] / length, -z[1] / length, -z[2] / length];
    }
 
-   // t = DISTANCE ALONG THE RAY TO THE POINT CLOSEST TO THE DRONE
-   // SKIP DRONES BEHIND THE CONTROLLER
-   // miss = DISTANCE FROM THE RAY TO THE DRONE'S CENTER
-   // KEEP THE CLOSES DRONE WITHIN hit_radius
+   // SHOOT A BEAM FROM THE CONTROLLER AND CHECK FOR HITS ON DRONES
 
    function shoot(origin, direction) {
       let closest = null;
       let closestDist = Infinity;
+
+      if (gameWon || gameLost) {
+         return;
+      }
 
       for (let i = 0; i < drones.length; i++){
          let drone = drones[i];
          if (!drone.active) {
             continue;
          }
+
+         // VECTOR FROM THE BEAM ORIGIN TO THE DRONE
+
          let dx = drone.pos[0] - origin[0];
          let dy = drone.pos[1] - origin[1];
          let dz = drone.pos[2] - origin[2];
 
+         // DRONE'S POSITION PROJECTED ONTO THE RAY
+
          let t = dx * direction[0] + dy * direction[1] + dz * direction[2];
+
+         // SKIP DRONES BEHIND THE CONTROLLER
 
          if (t < 0){
             continue;
          }
 
-         let px = origin[0] + direction[0] * t - drone.pos[0];
-         let py = origin[1] + direction[1] * t - drone.pos[1];
-         let pz = origin[2] + direction[2] * t - drone.pos[2];
+         // CALCULATE THE CLOSEST POINT ON THE RAY TO THE DRONE
+
+         let px = (origin[0] + direction[0] * t) - drone.pos[0];
+         let py = (origin[1] + direction[1] * t) - drone.pos[1];
+         let pz = (origin[2] + direction[2] * t) - drone.pos[2];
          let miss = Math.sqrt(px * px + py * py + pz * pz);
+
+         // CHECK IF THE DRONE IS WITHIN HIT RADIUS AND CLOSEST SO FAR
 
          if (miss < hit_radius && t < closestDist) {
             closest = drone;
             closestDist = t
          }
       }  
+
+         // IF A CLOSEST DRONE WAS FOUND, HIT IT AND PUT THAT DRONE OUT OF PLAY AND ADD 1 TO THE SCORE
 
          if (closest) {
             closest.active = false;
@@ -253,9 +284,9 @@ export const init = async model => {
        lastTime = model.time;
    
        // CHECKS IF GAME IS STILL ACTIVE
-       if (!gameWon && !gameLost) {
+      if (!gameWon && !gameLost) {
          if (plantHealth <= 0) {
-             gameLost = true;
+            gameLost = true;
          }
          else if (score >= targetScore) {
             gameWon = true;
@@ -269,22 +300,21 @@ export const init = async model => {
             updateDrones(dt);
          }
             clay.defineTextMesh('status', `Score: ${score} Plant Health: ${plantHealth}`);
-            clay.defineTextMesh('game_over', ``);
-         }
+      }
       else if (gameWon) {
-            clay.defineTextMesh('status', `Final Score: ${score} | You Saved The Plant!`);
+         clay.defineTextMesh('status', `Final Score: ${score} | You Saved The Plant!`);
          clay.defineTextMesh('game_over', `You Win!`);
-         }
-         else {
-            clay.defineTextMesh('status', `Final Score: ${score} | Plant Destroyed!`);
-            clay.defineTextMesh('game_over', `Game Over! You lost!`);
-         }
+      }
+      else {
+         clay.defineTextMesh('status', `Final Score: ${score} | Plant Destroyed!`);
+         clay.defineTextMesh('game_over', `Game Over! You lost!`);
+      }
        
        // BEGIN ANIMATE BY SYNCHRONIZING STATE
 
        objInfo = server.synchronize('objInfo');
 
-       // MOVE TO HER POSITION, SHRINK, THEN SPIN AROUND HER MIDDLE
+       // MOVE TO HER POSITION AND SHRINK
 
        model.identity().move(objInfo.xyz[0], objInfo.xyz[1], objInfo.xyz[2]).scale(0.15).turnY(Math.PI+1).move(0, 0, 1);
 
