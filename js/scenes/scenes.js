@@ -13,6 +13,8 @@ export default () => {
             { name: "linefont2", path: "./linefont2.js", public: true },
             { name: "buddha"   , path: "./buddha.js"   , public: true },
             { name: "game"     , path: "./game.js"     , public: true },
+            { name: "beamSphere", path: "./beamSphere.js", public: true },
+            { name: "construct" , path: "./construct.js" , public: true },
       ]
    };
 }
