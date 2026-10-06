@@ -2,19 +2,67 @@
 
    A game involving defending a plant from incoming drones with 
    a hovering robot representing EVE from Wall-E present
+   - Pull a trigger to start
    - Point a controller and pull the trigger to shoot drones
    - Shoot 20 drones to win; the plant loses 10 points per drone that reaches it
+   - Multiplayer: drones follow a fixed schedule, and players only send 'start', 'hit', and 'reset' messages
+   - After the game ends, pull a trigger to reset
 
 */
 
 import * as global from "../global.js";
 import { ControllerBeam } from "../render/core/controllerInput.js";
 import { Gltf2Node } from "../render/nodes/gltf2.js";
+import { loadSound, playSoundAtPosition } from "../util/positional-audio.js"
 
 
 window.objInfo = {           // SHARED STATE       
    xyz: [0.4, 0.3, -0.5]     // STARTING POSITION                      
 }
+
+ // CONSTANTS FOR DRONE SPAWNING ANGLES, HEIGHTS, AND SPEEDS
+
+const NUM_DRONES = 40;
+const DRONE_COUNT = 12;
+const INTERVAL = 2;
+const WIN_SCORE = 20;
+const HIT_RADIUS = 1;
+const PLANT_POS = [-0.2, 1.15, 0];
+
+const ANGLES = [-0.9, -1.4, 0.2, 0.6, 0.8];
+const HEIGHTS = [1.3, 2.3, 1.8, 2.0, 1.1];
+const SPEEDS = [0.9, 1.9, 1.4, 1.0, 1.6];
+
+// START POINT, SPEED, DIRECTION, DISTANCE, SPAWN TIME, ARRIVE TIME
+
+function droneInfo(n){
+   let angle = -Math.PI / 2 + ANGLES[n % 5];
+   let height = HEIGHTS[n % 5];
+   let speed = SPEEDS[n % 5];
+   let start = [PLANT_POS[0] + Math.cos(angle) * 10, height, PLANT_POS[2] + Math.sin(angle) * 10];
+   let direction =  [PLANT_POS[0] - start[0], PLANT_POS[1] - start[1], PLANT_POS[2] - start[2]];
+   let distance = Math.sqrt(direction[0] * direction[0] + direction[1] * direction[1] + direction[2] * direction[2]);
+   let spawn = n * INTERVAL;
+   return {start, direction, distance, speed, spawn, arrive: spawn + distance / speed};
+}
+
+// POSITION OF A DRONE AT ANY GIVEN TIME
+
+function droneAt(n, t){
+   let info = droneInfo(n);
+   let progress = (t -info.spawn) * info.speed / info.distance; // fraction of the trip completed
+   return [info.start[0] + progress * info.direction[0],
+           info.start[1] + progress * info.direction[1],
+           info.start[2] + progress * info.direction[2]];
+}
+
+// SOUND PLAYED WHEN A DRONE IS SHOT
+
+let shootSoundBuffer = null;
+
+loadSound('../../media/sound/SFXs/demoBalls/SFX_Ball_Create_Mono_01.wav', buffer => shootSoundBuffer = buffer);
+
+
 
 export const init = async model => {
 
@@ -22,11 +70,7 @@ export const init = async model => {
 
    let plant = new Gltf2Node({ url: './media/gltf/plant/plant.glb' });
    plant.scale = [0.01, 0.01, 0.01];
-   plant.translation = [-0.2, 1.15, 0];
-   let plantPos = [-0.2, 1.15, 0];
-   let spawnTimer = 0;
-   let spawnInterval = 2; 
-   let lastTime = null;
+   plant.translation = PLANT_POS;
    global.gltfRoot.addNode(plant);
 
    // GAME VARIABLES: SCORE, PLANT HEALTH, AND WIN/LOSS FLAGS
@@ -37,15 +81,28 @@ export const init = async model => {
    let gameWon = false;
    let gameLost = false;
 
-   // ARRAY OF ACTIVE DRONES; INACTIVE ONES ARE OFF SCREEN
+   // GLOBAL DRONE VARIABLES --> SHARED STATE FOR ALL PLAYERS
 
-   const drones = [];
-   for (let i = 0; i < 5; i++) {
+   server.init('drones', {});
+
+   // SECONDS SINCE GAME STARTED
+
+   function gameTime(){
+      if(drones.start == null){
+         return -1;
+      }
+      return (Date.now() - drones.start) / 1000;
+   }
+
+   // ARRAY OF DRONE MODELS
+
+   const droneModels = [];
+   for (let i = 0; i < DRONE_COUNT; i++) {
       let drone = new Gltf2Node({ url: './media/gltf/drone/scene.gltf'});
       drone.scale = [0.000025, 0.000025, 0.000025];
       drone.translation = [0, -100, 0];
       global.gltfRoot.addNode(drone);
-      drones.push({drone, active: false, pos: [0, -100, 0], speed: 0.5});
+      droneModels.push({drone, active: false, pos: [0, -100, 0], n: -1});
    }
 
    // SHAPES TO MAKE UP EVE
@@ -65,9 +122,17 @@ export const init = async model => {
    let RBeam = new ControllerBeam(model, 'right');
 
 
-   // TRIGGER PRESS SHOOTS ALONG THE CONTROLLER BEAM
+   // TRIGGER PRESS SHOOTS ALONG THE CONTROLLER BEAM AND STARTS THE GAME IF IT HASN'T ALREADY
 
    inputEvents.onPress = hand => {
+      if (gameWon || gameLost) {
+         server.send('drones', {op: 'reset'});
+         return;
+      }
+      if(drones.start == null){
+         server.send('drones', {op: 'start', t: Date.now()});
+         return;
+      }
       shoot(beamOrigin(hand), beamDirection(hand));
    };
 
@@ -95,84 +160,44 @@ export const init = async model => {
    let text = clay.defineTextMesh('instructions', `EVE's Plant Defense\nDrones are coming - shoot them before they get to the plant `);
    model.add('instructions').move(-2, 5, 4).turnY(Math.PI-1).color(0, .25, .5).scale(5);
 
-   let status = clay.defineTextMesh('status', `Score: 0, Plant Health: 100`);
+   let status = clay.defineTextMesh('status', `Pull a trigger to start the game`);
    model.add('status').move(-2, 4.5, 4).turnY(Math.PI-1).color(0, .25, .5).scale(5);
 
    let gameOver = clay.defineTextMesh('game_over', ``);
    model.add('game_over').move(-2, 4, 4).turnY(Math.PI-1).color(0, .25, .5).scale(5);
-   
-   // SPAWNS THE DRONES AT RANDOM ANGLES
 
-   function spawnDrone() {
-    
-      let d = null;
-      for (let i = 0; i < drones.length; i++) {
-         if (!drones[i].active) {
-            d = drones[i];
-            break;
-         }
-      }
-      
-      if (d == null) {
-         return;
+
+   // SHOWS EACH SCHEDULED DRONE AT ITS CURRENT POSITION AND HIDES INACTIVE ONES
+
+   function updateDrones(t) {
+      for (let i = 0; i < droneModels.length; i++) {
+         droneModels[i].active = false;
       }
 
-      let angle = - Math.PI / 2 + (Math.random() - 0.5) * Math.PI;
-      let dist = 10;
-
-      d.pos = [
-         plantPos[0] + Math.cos(angle) * dist,
-         1 + Math.random() * 2,
-         plantPos[2] + Math.sin(angle) * dist
-      ];
-      d.speed = 0.9 + Math.random() * 0.5;
-      d.active = true;
-      d.drone.translation = d.pos;
-
-   }
-
-   // MOVES ACTIVE DRONES TOWARDS THE PLANT
-
-   function updateDrones(dt) {
-      for (let i = 0; i < drones.length; i++) {
-         let drone = drones[i];
-         if (!drone.active) {
-            continue;
+      if (t >= 0){
+         for (let n = 0; n < NUM_DRONES; n++) {
+            let info = droneInfo(n);
+            let shot = drones.hits && drones.hits[n];
+            // a drone should be visible if it has spawned, hasn't arrived yet, and hasn't been shot
+            if (t >= info.spawn && t < info.arrive && !shot) { 
+               // reusing the drone models
+               let d = droneModels[n % DRONE_COUNT];
+               // keeping track of the slot the drone uses
+               d.n = n;
+               d.active = true;
+               d.pos = droneAt(n, t);
+            }
          }
+      }
 
-         // DIRECTIONS FROM DRONE TO PLANT
-
-
-         let dx = plantPos[0] - drone.pos[0]; 
-         let dy = plantPos[1] - drone.pos[1];
-         let dz = plantPos[2] - drone.pos[2];
-         let distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
-
-         // CHECKS FOR IMPACT AND IF THE DRONE HAS REACHED, PLANT LOSES 10 HEALTH AND DRONE IS INACTIVE
-
-         if (distance < 0.1) {
-            plantHealth -= 10;
-            drone.active = false;
-            drone.pos = [0, -100, 0];
-            drone.drone.translation = drone.pos;
-            continue;
+      for (let i = 0; i < droneModels.length; i++) {
+         let d = droneModels[i];
+         if (!d.active) {
+            d.pos = [0, -100, 0];
          }
-
-         // MOVING TOWARDS THE PLANT
-
-         let step = Math.min(1, drone.speed * dt / distance);
-         drone.pos[0] += dx * step;
-         drone.pos[1] += dy * step;
-         drone.pos[2] += dz * step;
-
-         // UPDATES THE DRONE'S POSITION IN THE WORLD
-
-         drone.drone.translation = drone.pos;
-
+         d.drone.translation = d.pos; 
       }
    }
-
-   let hit_radius = 1;
 
    // RETURNS POSITION OF THE BEAM ORIGIN BASED ON THE HAND
 
@@ -220,8 +245,8 @@ export const init = async model => {
          return;
       }
 
-      for (let i = 0; i < drones.length; i++){
-         let drone = drones[i];
+      for (let i = 0; i < droneModels.length; i++){
+         let drone = droneModels[i];
          if (!drone.active) {
             continue;
          }
@@ -251,19 +276,16 @@ export const init = async model => {
 
          // CHECK IF THE DRONE IS WITHIN HIT RADIUS AND CLOSEST SO FAR
 
-         if (miss < hit_radius && t < closestDist) {
+         if (miss < HIT_RADIUS && t < closestDist) {
             closest = drone;
-            closestDist = t
+            closestDist = t;
          }
       }  
 
-         // IF A CLOSEST DRONE WAS FOUND, HIT IT AND PUT THAT DRONE OUT OF PLAY AND ADD 1 TO THE SCORE
+         // IF A CLOSEST DRONE WAS FOUND, SENDS A HIT MESSAGE WITH THE DRONE'S INDEX AND THE CURRENT GAME TIME
 
          if (closest) {
-            closest.active = false;
-            closest.pos = [0, -100, 0];
-            closest.drone.translation = closest.pos;
-            score ++;
+            server.send('drones', {op: 'hit', n: closest.n, t: gameTime()})
          }
       
    }
@@ -272,42 +294,86 @@ export const init = async model => {
    // ANIMATION FRAMEWORK
 
    model.animate(() => {
+      
+      // APPLY MESSAGES FROM ALL CLIENTS
 
-       let dt;
-       if (lastTime === null) {
-         dt = 0;
-       }
-       else {
-         dt = model.time - lastTime;
-       }
+      server.sync('drones', (msgs, clientID) => {
+         for (let id in msgs){
+            let m = msgs[id];
+            if (m.op == 'start' && drones.start == null) {
+               drones.start = m.t;
+            }
+            else if (m.op == 'hit') {
+               if (!drones.hits){
+                  drones.hits = {};
+               }
+               // if the drone hasn't been hit yet and the hit time is before it arrives, record the hit
+               if (!drones.hits[m.n] && m.t < droneInfo(m.n).arrive) {
+                  drones.hits[m.n] = { by: clientID, t: m.t };
 
-       lastTime = model.time;
+                  if(shootSoundBuffer) {
+                     playSoundAtPosition(shootSoundBuffer, droneAt(m.n, m.t));
+                  }
+               }
+            }
+            else if (m.op == 'reset'){
+               drones.start = null;
+               drones.hits = {};
+               gameWon = false;
+               gameLost = false;
+               plantHealth = 100;
+               score = 0;
+               clay.defineTextMesh('game_over', ``);
+            }
+         }
+      });
+
+      let t = gameTime();
    
-       // CHECKS IF GAME IS STILL ACTIVE
+      // SCORE AND PLANT HEALTH UPDATED ACCORDINGLY
+
+      if (t >= 0 && !gameWon && !gameLost) {
+         score = 0;
+         plantHealth = 100;
+         for (let i = 0; i < NUM_DRONES; i++) {
+            if (drones.hits && drones.hits[i]) {
+               score += 1;
+            }
+            else if (t >= droneInfo(i).arrive) {
+               plantHealth -= 10;
+            }
+         }
+      }
+
+      // CHECK IF GAME IS STILL ACTIVE
+
       if (!gameWon && !gameLost) {
          if (plantHealth <= 0) {
             gameLost = true;
          }
-         else if (score >= targetScore) {
+         else if (score >= WIN_SCORE) {
             gameWon = true;
          }
          else {
-            spawnTimer += dt;
-            if (spawnTimer >= spawnInterval) {
-               spawnTimer = 0;
-               spawnDrone();
-            }
-            updateDrones(dt);
+            updateDrones(t);
          }
+         if (drones.start == null){
+            clay.defineTextMesh('status', `Pull a trigger to start the game`);
+         }
+         else {
             clay.defineTextMesh('status', `Score: ${score} Plant Health: ${plantHealth}`);
+     
+         }
       }
       else if (gameWon) {
+         updateDrones(-1);
          clay.defineTextMesh('status', `Final Score: ${score} | You Saved The Plant!`);
-         clay.defineTextMesh('game_over', `You Win!`);
+         clay.defineTextMesh('game_over', `You Win! Pull a trigger to play again!`);
       }
       else {
+         updateDrones(-1);
          clay.defineTextMesh('status', `Final Score: ${score} | Plant Destroyed!`);
-         clay.defineTextMesh('game_over', `Game Over! You lost!`);
+         clay.defineTextMesh('game_over', `Game Over! You lost! Pull a trigger to play again!`);
       }
        
        // BEGIN ANIMATE BY SYNCHRONIZING STATE
