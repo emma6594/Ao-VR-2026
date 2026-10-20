@@ -19,6 +19,8 @@ export default () => {
             { name: "aiscene"   , path: "./aiScene.js"   , public: true },
             { name: "SO101"      , path: "./SO101.js"      , public: true },
             { name: "SO101_parts", path: "./SO101_parts.js", public: true },
+            { name: "complexScene", path: "./complexScene.js", public: true },
+            { name: "SO101_annotated", path: "./SO101_annotated.js", public: true }
       ]
    };
 }
