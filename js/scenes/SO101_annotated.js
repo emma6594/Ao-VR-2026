@@ -79,13 +79,13 @@ export const init = async model => {
    ball_tip.color([0, 1, 0]);
 
    // RING SHOWING FURTHEST REACH RADIUS OF THE ARM FOUND THROUGH EXPERIMENTATION OF DIFFERENT VALUES
-   let reachRadius = 0.47;
-   let numDots = 45;
-   for (let k = 0; k < numDots; k++) {
-      let angle = 2 * Math.PI * k / numDots;
-      let x = -0.1 + reachRadius * Math.cos(angle);
+   let reach_radius = 0.47;
+   let dots = 45;
+   for (let k = 0; k < dots; k++) {
+      let angle = 2 * Math.PI * k / dots;
+      let x = -0.1 + reach_radius * Math.cos(angle);
       let y = 1.5;
-      let z = reachRadius * Math.sin(angle);
+      let z = reach_radius * Math.sin(angle);
       let dot = model.add('sphere');
       dot.move(x, y, z);
       dot.scale(0.005, 0.005, 0.005);
