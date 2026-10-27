@@ -20,9 +20,10 @@ export default () => {
             { name: "SO101"      , path: "./SO101.js"      , public: true },
             { name: "SO101_parts", path: "./SO101_parts.js", public: true },
             { name: "complexScene", path: "./complexScene.js", public: true },
-            { name: "SO101_annotated", path: "./SO101_annotated.js", public: true }
+            { name: "SO101_annotated", path: "./SO101_annotated.js", public: true },
             { name: "bouncing"   , path: "./bouncing.js"   , public: true },
             { name: "widgets"    , path: "./widgets.js"    , public: true },
+            { name: "widget_scene"  , path: "./widget_scene.js"  , public: true },
       ]
    };
 }
