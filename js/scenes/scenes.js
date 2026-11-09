@@ -25,6 +25,7 @@ export default () => {
             { name: "widgets"    , path: "./widgets.js"    , public: true },
             { name: "widget_scene"  , path: "./widget_scene.js"  , public: true },
             { name: "mini_person"  , path: "./mini_person.js"  , public: true },
+            { name: "minime"     , path: "./minime.js"     , public: true },
       ]
    };
 }
