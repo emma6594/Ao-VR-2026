@@ -16,7 +16,15 @@ export const init = async model => {
    RHand.add('tubeZ').scale(.02,.02,-.05).color(1,1,1);
    RHand.add('sphere').move(0,0,-.1).scale(.03).color(.5,.5,.5);
 
+   clay.defineTextMesh('dbg', '');
+   model.add('dbg').move(-.3, 1.4, -.5).scale(.5);
+
    model.animate(() => {
+      const f = m => m ? m[12].toFixed(2)+', '+m[13].toFixed(2)+', '+m[14].toFixed(2) : 'none';
+   clay.defineTextMesh('dbg',
+      'head0: ' + f(clientState.head(0)) + '\n' +
+      'head1: ' + f(clientState.head(1)) + '\n' +
+      'head2: ' + f(clientState.head(2)));
       tableTop.identity().move(0,.75,-.1).scale(.3,.3,-.3);
       head.setMatrix(clientState.head(0));
       LHand.setMatrix(clientState.hand(0,'left' ));
