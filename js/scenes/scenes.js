@@ -27,7 +27,8 @@ export default () => {
             { name: "mini_person"  , path: "./mini_person.js"  , public: true },
             { name: "minime"     , path: "./minime.js"     , public: true },
             { name: "snowball_target_game", path: "./snowball_target_game.js", public: true },
-   
+            { name: "kbdEvents"  , path: "./kbdEvents.js"  , public: true },
+            { name: "kbdEvents2" , path: "./kbdEvents2.js" , public: true },
       ]
    };
 }
