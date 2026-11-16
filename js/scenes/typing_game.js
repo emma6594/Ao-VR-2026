@@ -4,7 +4,7 @@
    - Hold space, press k, then enter to start the game
    - When a word is being typed, that word will turn yellow to signal to the player
    - Once a word is correctly typed in time, it will disappear and the player will score a point
-   - Once the 60 second timer is up, the game will end and the final score will be displayed
+   - Once the 90 second timer is up, the game will end and the final score will be displayed
    - The instructions will be displayed after, and the player can start a new round by repeating the first step
 
 */
@@ -63,7 +63,7 @@ export const init = async model => {
     // TIMER VARIABLE TO CONTROL THE SPAWN LOOP
     let timer = null;
     // ROUND LENGTH IN SECONDS
-    const GAME_SECONDS = 60;
+    const GAME_SECONDS = 90;
 
     // DEFINING SLOTS FOR WORDS TO SPAWN
     const COLS = [-1.5, 0, 1.5];
@@ -95,7 +95,7 @@ export const init = async model => {
         const free = SLOTS.map((_, idx) => idx).filter(idx => !used.includes(idx));
         
         // SPAWN A WORD IF THERE IS ONE AVAILABLE AND SETS ITS POSITION, SPEED, AND SPAWN TIME
-        if (pool.length > 0 && free.length >0 && typingGame.active.length < maxActive()) {
+        if (pool.length > 0 && free.length > 0 && typingGame.active.length < maxActive()) {
             let seconds = SECONDS_SLOW + (SECONDS_FAST - SECONDS_SLOW) * lvl;
             const slot = free[Math.random() * free.length >> 0];
             typingGame.active.push({
@@ -121,7 +121,7 @@ export const init = async model => {
             return;
         }
         spawn();
-        timer = setTimeout(loop, 3000 - 1800 * level());
+        timer = setTimeout(loop, 2000 - 1000 * level());
     };
 
     // FUNCTION TO REMOVE WORDS THAT HAVE REACHED THE END Z POSITION AND BROADCAST THE UPDATED typingGame TO ALL CLIENTS
