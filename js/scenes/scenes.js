@@ -29,6 +29,7 @@ export default () => {
             { name: "snowball_target_game", path: "./snowball_target_game.js", public: true },
             { name: "kbdEvents"  , path: "./kbdEvents.js"  , public: true },
             { name: "kbdEvents2" , path: "./kbdEvents2.js" , public: true },
+            { name: "typing_game", path: "./typing_game.js", public: true },
       ]
    };
 }
