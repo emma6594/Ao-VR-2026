@@ -19,7 +19,7 @@ export const init = async model => {
     const START_Z = -4;
     const END_Z = -1.8;
     const SECONDS_SLOW = 22;
-    const SECONDS_FAST = 10;
+    const SECONDS_FAST = 9;
 
     // BACKDROP BEHIND THE WORDS
     let background = model.add('cube').move(0, 1.5, -4.5).scale(7, 5, 0.01).color(0, 0, 0.8).opacity(1);
